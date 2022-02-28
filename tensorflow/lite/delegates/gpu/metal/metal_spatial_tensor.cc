@@ -417,6 +417,64 @@ absl::Status MetalSpatialTensor::CreateFromDescriptor(
   return absl::OkStatus();
 }
 
+absl::Status MetalSpatialTensor::ToDescriptor(TensorDescriptor* desc,
+                                              id<MTLDevice> device) const {
+  *desc = descriptor_;
+  desc->shape = shape_;
+  desc->data.resize(GetMemorySizeInBytes());
+  return ReadData(device, desc->data.data());
+}
+
+absl::Status MetalSpatialTensor::WriteData(id<MTLDevice> device,
+                                           const void* ptr) {
+  switch (descriptor_.storage_type) {
+    case TensorStorageType::BUFFER:
+    case TensorStorageType::IMAGE_BUFFER:
+      std::memcpy(
+          reinterpret_cast<uint8_t*>([memory_ contents]) + buffer_offset_, ptr,
+          GetMemorySizeInBytes());
+      break;
+    case TensorStorageType::TEXTURE_2D:
+      WriteDataToTexture2D(texture_mem_, device, ptr);
+      break;
+    case TensorStorageType::TEXTURE_3D:
+      WriteDataToTexture3D(texture_mem_, device, ptr);
+      break;
+    case TensorStorageType::TEXTURE_ARRAY:
+      WriteDataToTexture2DArray(texture_mem_, device, ptr);
+      break;
+    case TensorStorageType::SINGLE_TEXTURE_2D:
+    default:
+      return absl::InternalError("Unsupported tensor storage type");
+  }
+  return absl::OkStatus();
+}
+
+absl::Status MetalSpatialTensor::ReadData(id<MTLDevice> device,
+                                          void* ptr) const {
+  switch (descriptor_.storage_type) {
+    case TensorStorageType::BUFFER:
+    case TensorStorageType::IMAGE_BUFFER:
+      std::memcpy(
+          ptr, reinterpret_cast<uint8_t*>([memory_ contents]) + buffer_offset_,
+          GetMemorySizeInBytes());
+      break;
+    case TensorStorageType::TEXTURE_2D:
+      ReadDataFromTexture2D(texture_mem_, device, ptr);
+      break;
+    case TensorStorageType::TEXTURE_3D:
+      ReadDataFromTexture3D(texture_mem_, device, ptr);
+      break;
+    case TensorStorageType::TEXTURE_ARRAY:
+      ReadDataFromTexture2DArray(texture_mem_, device, ptr);
+      break;
+    case TensorStorageType::SINGLE_TEXTURE_2D:
+    default:
+      return absl::InternalError("Unsupported tensor storage type");
+  }
+  return absl::OkStatus();
+}
+
 absl::Status MetalSpatialTensor::SetBufferHandle(id<MTLBuffer> buffer) {
   if (memory_owner_) {
     return absl::InvalidArgumentError(
