@@ -33,6 +33,7 @@ limitations under the License.
 #include "mlir/Dialect/ControlFlow/IR/ControlFlow.h"  // from @llvm-project
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"  // from @llvm-project
 #include "mlir/Dialect/Linalg/IR/Linalg.h"  // from @llvm-project
+#include "mlir/Dialect/Linalg/Transforms/BufferizableOpInterfaceImpl.h"  // from @llvm-project
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"  // from @llvm-project
 #include "mlir/Dialect/Math/IR/Math.h"  // from @llvm-project
 #include "mlir/Dialect/MemRef/IR/MemRef.h"  // from @llvm-project
@@ -124,8 +125,9 @@ struct ComputeOpAndFuncBufferizePass
   // TODO(b/173201243): Move to tablegen.
   void getDependentDialects(DialectRegistry& registry) const override {
     registry.insert<linalg::LinalgDialect, bufferization::BufferizationDialect,
-                    lmhlo::LmhloDialect, memref::MemRefDialect,
-                    vector::VectorDialect>();
+                    lmhlo::LmhloDialect, linalg::LinalgDialect,
+                    memref::MemRefDialect, vector::VectorDialect>();
+    linalg::registerBufferizableOpInterfaceExternalModels(registry);
     vector::registerBufferizableOpInterfaceExternalModels(registry);
   }
 
@@ -137,8 +139,8 @@ struct ComputeOpAndFuncBufferizePass
         bufferization::getPartialBufferizationOptions();
     // TODO(springerm): Add dialects to this filter as more and more dialects
     // will be migrated to BufferizableOpInterface-based bufferization.
-    options
-        .allowDialectInFilter<tensor::TensorDialect, vector::VectorDialect>();
+    options.allowDialectInFilter<linalg::LinalgDialect, tensor::TensorDialect,
+                                 vector::VectorDialect>();
     // Ops inside TiledLoopOps have special handling.
     options.denyOperationInFilter([](Operation* op) {
       return mlir::isa<gml_st::LoopOp>(op->getParentOp());
@@ -196,7 +198,6 @@ struct ComputeOpAndFuncBufferizePass
 
     // Configure legality and structural patterns.
     bufferization::populateBufferizeMaterializationLegality(target);
-    linalg::populateLinalgBufferizePatterns(converter, patterns);
     populateShapeStructuralTypeConversionsAndLegality(converter, patterns,
                                                       target);
     scf::populateSCFStructuralTypeConversionsAndLegality(converter, patterns,
@@ -274,11 +275,12 @@ struct TiledLoopBufferizePass
 struct FinalBufferizePass : public FinalBufferizePassBase<FinalBufferizePass> {
   // TODO(b/173201243): Move to tablegen.
   void getDependentDialects(DialectRegistry& registry) const override {
-    registry.insert<AffineDialect, memref::MemRefDialect, scf::SCFDialect,
-                    shape::ShapeDialect, tensor::TensorDialect,
+    registry.insert<AffineDialect, linalg::LinalgDialect, memref::MemRefDialect,
+                    scf::SCFDialect, shape::ShapeDialect, tensor::TensorDialect,
                     tf_framework::TFFrameworkDialect, lmhlo::LmhloDialect,
                     arith::ArithmeticDialect, vector::VectorDialect>();
     arith::registerBufferizableOpInterfaceExternalModels(registry);
+    linalg::registerBufferizableOpInterfaceExternalModels(registry);
     tensor::registerBufferizableOpInterfaceExternalModels(registry);
     vector::registerBufferizableOpInterfaceExternalModels(registry);
   }
@@ -296,9 +298,9 @@ struct FinalBufferizePass : public FinalBufferizePassBase<FinalBufferizePass> {
     options.bufferAlignment = alignment_;
     // TODO(springerm): Add dialects to this filter as more and more dialects
     // will be migrated to BufferizableOpInterface-based bufferization.
-    options
-        .allowDialectInFilter<arith::ArithmeticDialect, StandardOpsDialect,
-                              tensor::TensorDialect, vector::VectorDialect>();
+    options.allowDialectInFilter<
+        arith::ArithmeticDialect, linalg::LinalgDialect, StandardOpsDialect,
+        tensor::TensorDialect, vector::VectorDialect>();
     bufferization::AlwaysCopyBufferizationState bufferization_state(options);
     bufferization::populateBufferizationPattern(bufferization_state, patterns);
 
@@ -343,7 +345,6 @@ struct FinalBufferizePass : public FinalBufferizePassBase<FinalBufferizePass> {
         typesAreLegal);
 
     RewritePatternSet patterns(&getContext());
-    linalg::populateLinalgBufferizePatterns(converter, patterns);
     populateEliminateBufferizeMaterializationsPatterns(converter, patterns);
     populateExtraBufferizePatterns(&getContext(), &converter, &patterns);
     populateShapeStructuralTypeConversionsAndLegality(converter, patterns,
