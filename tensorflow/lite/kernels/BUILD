@@ -667,7 +667,7 @@ BUILTIN_KERNEL_DEPS = [
     ":padding",
     "//third_party/eigen3",
     "@flatbuffers",
-    "//tensorflow/lite:framework_lib",
+    "//tensorflow/lite:framework_stable",
     "//tensorflow/lite:minimal_logging",
     "//tensorflow/lite:string_util",
     "//tensorflow/lite:util",
@@ -859,7 +859,7 @@ cc_library(
     ],
     deps = [
         ":builtin_op_kernels",
-        "//tensorflow/lite:framework",
+        "//tensorflow/lite:framework_stable",
         "//tensorflow/lite:tflite_with_xnnpack_optional",
         "//tensorflow/lite/c:common",
         "//tensorflow/lite/schema:schema_fbs",
@@ -878,7 +878,7 @@ cc_library(
     compatible_with = get_compatible_with_portable(),
     deps = [
         ":builtin_op_kernels",  # buildcleaner: keep
-        "//tensorflow/lite:cc_api",
+        "//tensorflow/lite:cc_api_stable",
         "//tensorflow/lite:mutable_op_resolver",
         "//tensorflow/lite:tflite_with_xnnpack_optional",
         "//tensorflow/lite/c:common",
